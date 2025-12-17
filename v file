@@ -1,0 +1,188 @@
+module cricket_scoreboard(
+    input        clk,          
+    input        rst,          
+
+    input        btn_wicket,   
+    input        btn_run1,     
+    input        btn_run2,     
+    input        btn_run4,     
+    input        btn_run6,     
+
+    output reg [6:0] seg,      
+    output reg [3:0] an        
+);
+
+    // 1 debounce/edge detect for all buttons
+
+    wire wicketClean, run1Clean, run2Clean, run4Clean, run6Clean;
+    wire wicketPulse, run1Pulse, run2Pulse, run4Pulse, run6Pulse;
+
+    // wicket button
+    debounce db_wicket(clk, btn_wicket, wicketClean);
+    edge_detector ed_wicket(clk, wicketClean, wicketPulse);
+
+    // run +1
+    debounce db_r1(clk, btn_run1, run1Clean);
+    edge_detector ed_r1(clk, run1Clean, run1Pulse);
+
+    // run +2
+    debounce db_r2(clk, btn_run2, run2Clean);
+    edge_detector ed_r2(clk, run2Clean, run2Pulse);
+
+    // run +4
+    debounce db_r4(clk, btn_run4, run4Clean);
+    edge_detector ed_r4(clk, run4Clean, run4Pulse);
+
+    // run +6
+    debounce db_r6(clk, btn_run6, run6Clean);
+    edge_detector ed_r6(clk, run6Clean, run6Pulse);
+
+    // 2 score counters
+
+    reg [3:0] wickets = 0;   
+    reg [6:0] runs = 0;      
+
+    always @(posedge clk) begin
+        if (rst) begin
+            wickets <= 0;
+            runs    <= 0;
+        end else begin
+            
+            // wickets
+            if (wicketPulse) begin
+                if (wickets == 10)
+                    wickets <= 0;
+                else
+                    wickets <= wickets + 1;
+            end
+
+            // runs
+            if (run6Pulse) begin
+                runs <= (runs + 6 >= 100) ? (runs + 6 - 100) : (runs + 6);
+            end else if (run4Pulse) begin
+                runs <= (runs + 4 >= 100) ? (runs + 4 - 100) : (runs + 4);
+            end else if (run2Pulse) begin
+                runs <= (runs + 2 >= 100) ? (runs + 2 - 100) : (runs + 2);
+            end else if (run1Pulse) begin
+                runs <= (runs + 1 >= 100) ? (runs + 1 - 100) : (runs + 1);
+            end
+        end
+    end
+
+    // 3 convert scores to bcd
+
+    reg [3:0] wicketTens, wicketOnes;
+    reg [3:0] runTens, runOnes;
+
+    always @(*) begin
+        // wickets BCD
+        if (wickets < 10) begin
+            wicketTens = 0;
+            wicketOnes = wickets;
+        end else begin
+            wicketTens = 1;
+            wicketOnes = 0;
+        end
+
+        // runs BCD conversion
+        // tens digit determined by range checking
+        if      (runs >= 90) runTens = 9;
+        else if (runs >= 80) runTens = 8;
+        else if (runs >= 70) runTens = 7;
+        else if (runs >= 60) runTens = 6;
+        else if (runs >= 50) runTens = 5;
+        else if (runs >= 40) runTens = 4;
+        else if (runs >= 30) runTens = 3;
+        else if (runs >= 20) runTens = 2;
+        else if (runs >= 10) runTens = 1;
+        else                 runTens = 0;
+
+        // ones digit = remainder
+        runOnes = runs - (runTens * 10);
+    end
+
+    // 4   four digit multiplexing 
+
+    reg [19:0] refreshCount = 0;
+    reg [1:0]  digitIndex = 0;
+    reg [3:0]  digitToDisplay;
+
+    always @(posedge clk) begin
+        refreshCount <= refreshCount + 1;
+        digitIndex   <= refreshCount[17:16];
+    end
+
+    always @(*) begin
+        case (digitIndex)
+            2'b00: begin digitToDisplay = wicketTens; an = 4'b0111; end
+            2'b01: begin digitToDisplay = wicketOnes; an = 4'b1011; end
+            2'b10: begin digitToDisplay = runTens;    an = 4'b1101; end
+            2'b11: begin digitToDisplay = runOnes;    an = 4'b1110; end
+            default: begin digitToDisplay = 0; an = 4'b1111; end
+        endcase
+    end
+
+    //  5  seven segment decoder
+
+    always @(*) begin
+        case (digitToDisplay)
+            4'd0: seg = 7'b1000000;
+            4'd1: seg = 7'b1111001;
+            4'd2: seg = 7'b0100100;
+            4'd3: seg = 7'b0110000;
+            4'd4: seg = 7'b0011001;
+            4'd5: seg = 7'b0010010;
+            4'd6: seg = 7'b0000010;
+            4'd7: seg = 7'b1111000;
+            4'd8: seg = 7'b0000000;
+            4'd9: seg = 7'b0010000;
+            default: seg = 7'b1111111;
+        endcase
+    end
+
+endmodule
+///////////////////////////////debouncing//////////////////////////////////////////////////
+
+module debounce( input CLK100MHz, // 10ns clock period
+input  noisy,   //noisy signal
+output clean     //clean signal
+);
+
+  reg[18:0] cnt4debounce=0;
+  // This constant sets the debounce time.
+  // Use 500,000 for 5 ms at 100 MHz in real hardware,
+  // but a much smaller value (like 200) for faster simulation.
+  localparam integer MAX = 500_000;
+
+always @ (posedge CLK100MHz)
+begin
+
+    if (noisy==0)                   cnt4debounce <= 0;                            
+    else if (cnt4debounce <MAX)    cnt4debounce <= cnt4debounce+ 1;
+    else                           cnt4debounce<= MAX; // saturate
+                            
+end
+
+assign clean=(cnt4debounce==MAX);                    
+ endmodule
+ 
+ 
+ /////////////////////////////edge detection///////////////////////
+ module edge_detector(
+    input  CLK100MHz,                 // system clock
+    input  before_edge_detection,     // debounced signal coming IN
+    output after_edge_detection       // 1-clock pulse coming OUT
+);
+
+    reg prev = 0;  // holds previous value
+
+    always @(posedge CLK100MHz) begin
+        prev <= before_edge_detection;
+    end
+
+    // Rising-edge pulse:
+    assign after_edge_detection = before_edge_detection & ~prev;
+
+endmodule
+ 
+
