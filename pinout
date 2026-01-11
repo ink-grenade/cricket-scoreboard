@@ -47,7 +47,7 @@ module cricket_scoreboard(
             runs    <= 0;
         end else begin
 
-            // WICKETS: saturate at 10 (do NOT wrap to 0)
+            // WICKETS: 
             if (wicketPulse) begin
                 if (wickets < 10)
                     wickets <= wickets + 1;
