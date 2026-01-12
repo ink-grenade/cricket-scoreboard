@@ -25,7 +25,7 @@ module cricket_scoreboard(
     debounce db_r1(clk, btn_run1, run1Clean);
     edge_detector ed_r1(clk, run1Clean, run1Pulse);
 
-    // run +2
+    // run+2
     debounce db_r2(clk, btn_run2, run2Clean);
     edge_detector ed_r2(clk, run2Clean, run2Pulse);
 
@@ -75,7 +75,7 @@ module cricket_scoreboard(
     reg [3:0] runTens, runOnes;
 
     always @(*) begin
-        // wickets BCD
+        // wickets BcD
         if (wickets < 10) begin
             wicketTens = 0;
             wicketOnes = wickets;
@@ -85,7 +85,7 @@ module cricket_scoreboard(
         end
 
         // runs BCD conversion
-        // tens digit determined by range checking
+        // tens digit determined via range checking
         if      (runs >= 90) runTens = 9;
         else if (runs >= 80) runTens = 8;
         else if (runs >= 70) runTens = 7;
@@ -97,7 +97,7 @@ module cricket_scoreboard(
         else if (runs >= 10) runTens = 1;
         else                 runTens = 0;
 
-        // ones digit = remainder
+        // ones digit = remainder of truncated value
         runOnes = runs - (runTens * 10);
     end
 
@@ -149,9 +149,8 @@ output clean     //clean signal
 );
 
   reg[18:0] cnt4debounce=0;
-  // This constant sets the debounce time.
-  // Use 500,000 for 5 ms at 100 MHz in real hardware,
-  // but a much smaller value (like 200) for faster simulation.
+  // this constant sets the debounce time.
+  
   localparam integer MAX = 500_000;
 
 always @ (posedge CLK100MHz)
